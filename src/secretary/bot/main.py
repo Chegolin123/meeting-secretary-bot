@@ -13,8 +13,10 @@ from pathlib import Path
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F, types
+from aiogram.types import LabeledPrice
 
 from secretary.config import Settings, get_settings
+from secretary.payments.gateway import Package, get_gateway
 from secretary.storage import Storage
 from secretary.worker.pipeline import Pipeline
 
@@ -25,7 +27,16 @@ HELP_TEXT = (
     "Пришли аудио/видео созвона — получу стенограмму с репликами спикеров, "
     "саммари, решения и задачи.\n\n"
     "Поддерживается: voice, аудио, видео, документ (до {max_mb} МБ)."
-    "\n\n<i>Расшифровка предоставленного файла · согласие на запись — ответственность клиента.</i>"
+    "\n\n💰 Тарифы: /buy — пакеты звонков (Telegram Stars)."
+    "\n<i>Расшифровка предоставленного файла · согласие на запись — ответственность клиента.</i>"
+)
+
+BUY_TEXT = (
+    "💰 <b>Пакеты звонков</b>\n\n"
+    "• Старт — 3 звонка/мес (бесплатно)\n"
+    "• 10 звонков/мес — 150 ⭐\n"
+    "• 30 звонков/мес — 350 ⭐\n\n"
+    "Нажми на пакет — оплата в Telegram Stars."
 )
 
 
@@ -52,10 +63,12 @@ async def main() -> None:
 
     storage = Storage(settings.db_path)
     await storage.init()
+    await storage.seed_packages()
 
     queue: asyncio.Queue[int] = asyncio.Queue()
     pipeline = Pipeline(settings, storage, bot, queue)
     worker = asyncio.create_task(pipeline.run_forever())
+    gateway = get_gateway(settings.payment_provider)
 
     @dp.message(F.text == "/start")
     async def on_start(message: types.Message) -> None:
@@ -67,6 +80,10 @@ async def main() -> None:
 
     @dp.message(F.voice | F.audio | F.video | F.document)
     async def on_media(message: types.Message) -> None:
+        ok, limit_msg = await _check_limit(message.from_user.id)
+        if not ok:
+            await message.answer(limit_msg)
+            return
         file_id, mime, name = _pick_file(message)
         size = getattr(getattr(message, _kind_of(message), None), "file_size", 0) or 0
         if size > settings.max_file_bytes:
@@ -92,6 +109,56 @@ async def main() -> None:
             return
         lines = [f"#{r['id']} · {r['status']} · {r['created_at'][:16].replace('T', ' ')}" for r in rows]
         await message.answer("📋 Последние заказы:\n" + "\n".join(lines))
+
+    # --- v1.1.0: пакеты и оплата (Telegram Stars) ---
+
+    @dp.message(F.text == "/buy")
+    async def on_buy(message: types.Message) -> None:
+        client = await storage.get_client(message.from_user.id)
+        pkg = await storage.get_package(client["package_id"]) if client else None
+        header = f"Твой пакет: <b>{pkg['name']}</b> ({pkg['calls_per_month']} зв/мес)\n\n" if pkg else ""
+        kb = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(text=f"10 звонков — 150 ⭐", callback_data="buy:mini"),
+                    types.InlineKeyboardButton(text=f"30 звонков — 350 ⭐", callback_data="buy:pro"),
+                ]
+            ]
+        )
+        await message.answer(header + BUY_TEXT, reply_markup=kb)
+
+    @dp.callback_query(F.data.startswith("buy:"))
+    async def on_buy_callback(callback: types.CallbackQuery) -> None:
+        package = Package(callback.data.split(":", 1)[1])
+        result = await gateway.issue_invoice(bot, callback.message.chat.id, package)
+        await callback.answer()
+        if not result.ok:
+            await callback.message.answer(f"❌ Не удалось выставить счёт: {result.reason}")
+
+    @dp.pre_checkout_query()
+    async def on_pre_checkout(query: types.PreCheckoutQuery) -> None:
+        await bot.answer_pre_checkout_query(query.id, ok=True)
+
+    @dp.message(F.successful_payment)
+    async def on_paid(message: types.Message) -> None:
+        payload = message.successful_payment.invoice_payload or ""
+        if payload.startswith("package:"):
+            package = Package(payload.split(":", 1)[1])
+            await storage.set_client_package(message.from_user.id, package_id={Package.MINI: 2, Package.PRO: 3}[package])
+            await message.answer(f"✅ Пакет «{package.title}» активирован! Присылай созвоны.")
+        else:
+            await message.answer("Оплата получена, но тип не распознан — напиши поддержке.")
+
+    async def _check_limit(user_id: int) -> tuple[bool, str | None]:
+        client = await storage.get_client(user_id)
+        pkg = await storage.get_package(client["package_id"])
+        used = await storage.count_done_calls(user_id)
+        if used >= pkg["calls_per_month"]:
+            return False, (
+                f"Лимит пакета «{pkg['name']}» исчерпан ({used}/{pkg['calls_per_month']} звонков).\n"
+                f"Расширь лимит: /buy"
+            )
+        return True, None
 
     @dp.startup()
     async def on_startup() -> None:

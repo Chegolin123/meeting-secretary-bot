@@ -147,6 +147,75 @@ class Storage:
             await db.commit()
             return cur.rowcount
 
+    # --- v1.1.0: клиенты и пакеты ---
+
+    async def seed_packages(self) -> None:
+        import aiosqlite  # noqa: PLC0415
+
+        now = self._now()
+        async with aiosqlite.connect(self._path) as db:
+            for pid, name, stars, calls in (
+                (1, "starter", 0, 3),
+                (2, "mini", 150, 10),
+                (3, "pro", 350, 30),
+            ):
+                await db.execute(
+                    "INSERT OR IGNORE INTO packages (id, name, price_stars, calls_per_month, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (pid, name, stars, calls, now),
+                )
+            await db.commit()
+
+    async def ensure_client(self, tg_user_id: int, package_id: int = 1) -> None:
+        import aiosqlite  # noqa: PLC0415
+
+        async with aiosqlite.connect(self._path) as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO clients (tg_user_id, package_id, created_at) VALUES (?, ?, ?)",
+                (tg_user_id, package_id, self._now()),
+            )
+            await db.commit()
+
+    async def set_client_package(self, tg_user_id: int, package_id: int) -> None:
+        import aiosqlite  # noqa: PLC0415
+
+        await self.ensure_client(tg_user_id, package_id)
+        async with aiosqlite.connect(self._path) as db:
+            await db.execute("UPDATE clients SET package_id = ? WHERE tg_user_id = ?", (package_id, tg_user_id))
+            await db.commit()
+
+    async def get_client(self, tg_user_id: int) -> dict | None:
+        import aiosqlite  # noqa: PLC0415
+
+        await self.ensure_client(tg_user_id)
+        async with aiosqlite.connect(self._path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute("SELECT * FROM clients WHERE tg_user_id = ?", (tg_user_id,))
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def get_package(self, package_id: int) -> dict | None:
+        import aiosqlite  # noqa: PLC0415
+
+        async with aiosqlite.connect(self._path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute("SELECT * FROM packages WHERE id = ?", (package_id,))
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def count_done_calls(self, tg_user_id: int, days: int = 30) -> int:
+        """Сколько заказов клиент сделал за последние N дней (лимит пакета)."""
+        import aiosqlite  # noqa: PLC0415
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        async with aiosqlite.connect(self._path) as db:
+            cur = await db.execute(
+                "SELECT COUNT(*) FROM orders WHERE tg_user_id = ? AND status = 'done' AND created_at >= ?",
+                (tg_user_id, cutoff),
+            )
+            row = await cur.fetchone()
+            return int(row[0] or 0)
+
     @staticmethod
     def row_to_order(row: dict) -> dict:
         row = dict(row)

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     assemblyai_api_key: str = ""
     assemblyai_base_url: str = "https://api.assemblyai.com"
 
+    # Оплата (v1.1.0): stars | yookassa
+    payment_provider: str = "stars"
+
     # LLM
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com/v1"
