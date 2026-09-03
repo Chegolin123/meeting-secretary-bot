@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     data_dir: str = "data"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    admin_tg_ids: str = ""  # владельцы бота через запятую (admin-панель)
 
     @property
     def max_file_bytes(self) -> int:

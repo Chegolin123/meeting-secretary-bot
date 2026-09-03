@@ -203,6 +203,15 @@ class Storage:
             row = await cur.fetchone()
             return dict(row) if row else None
 
+    async def list_clients(self) -> list[dict]:
+        import aiosqlite  # noqa: PLC0415
+
+        async with aiosqlite.connect(self._path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute("SELECT * FROM clients ORDER BY created_at DESC")
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
     async def count_done_calls(self, tg_user_id: int, days: int = 30) -> int:
         """Сколько заказов клиент сделал за последние N дней (лимит пакета)."""
         import aiosqlite  # noqa: PLC0415

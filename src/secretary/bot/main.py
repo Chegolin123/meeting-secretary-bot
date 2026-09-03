@@ -22,6 +22,15 @@ from secretary.storage import Storage
 from secretary.team import render_digest, resolve_owner
 from secretary.worker.pipeline import Pipeline
 
+from secretary.admin import (  # noqa: E402 — импорт после локальных модулей не требуется, но порядок читаемее
+    is_admin,
+    parse_grant,
+    render_clients,
+    render_errors,
+    render_orders,
+    render_stats,
+)
+
 log = logging.getLogger("secretary.bot")
 
 HELP_TEXT = (
@@ -70,6 +79,7 @@ async def main() -> None:
 
     @dp.message(F.text == "/start")
     async def on_start(message: types.Message) -> None:
+        await storage.ensure_client(message.from_user.id)  # регистрируем клиента по tg id
         await message.answer(HELP_TEXT.format(max_mb=settings.max_file_mb))
 
     @dp.message(F.text == "/help")
@@ -84,6 +94,49 @@ async def main() -> None:
             rows = await storage.list_orders(message.from_user.id, limit=100)
         enriched = [Storage.row_to_order(r) for r in rows]
         await message.answer(render_digest(enriched))
+
+    # --- Админ-панель владельца (ADMIN_TG_IDS) ---
+
+    async def _admin_guard(message: types.Message) -> bool:
+        if is_admin(settings.admin_tg_ids, message.from_user.id):
+            return True
+        await message.answer("⛔ Команда только для владельца.")
+        return False
+
+    @dp.message(F.text.startswith("/admin"))
+    async def on_admin(message: types.Message) -> None:
+        if not await _admin_guard(message):
+            return
+        text = message.text or ""
+        clients = await storage.list_clients()
+        packages = {p["id"]: p for p in [await storage.get_package(i) for i in (1, 2, 3)] if p}
+        if text.strip() == "/admin":
+            orders = await storage.list_orders(limit=500)
+            await message.answer(render_stats(clients, orders, settings.stt_provider, settings.max_file_mb))
+        elif text.startswith("/admin clients"):
+            # подставляем остаток лимита
+            for c in clients:
+                c["used_calls"] = await storage.count_done_calls(c["tg_user_id"])
+            await message.answer(render_clients(clients, packages))
+        elif text.startswith("/admin orders"):
+            orders = await storage.list_orders(limit=10)
+            await message.answer(render_orders(orders))
+        elif text.startswith("/admin errors"):
+            orders = await storage.list_orders(limit=200)
+            await message.answer(render_errors(orders))
+        elif text.startswith("/admin grant"):
+            parsed = parse_grant(text)
+            if parsed is None:
+                await message.answer("Формат: <code>/admin grant &lt;tg_id&gt; &lt;mini|pro&gt;</code>")
+                return
+            user_id, package = parsed
+            await storage.set_client_package(user_id, package_id=3 if package is Package.PRO else 2)
+            await message.answer(f"✅ Клиенту <code>{user_id}</code> выдан пакет «{package.title}».")
+        elif text.startswith("/admin health"):
+            await message.answer(
+                f"<b>Health</b>\nSTT: {settings.stt_provider}\nФайл до {settings.max_file_mb} МБ\n"
+                f"Админы: {settings.admin_tg_ids or 'не заданы'}"
+            )
 
     @dp.message(F.voice | F.audio | F.video | F.document)
     async def on_media(message: types.Message) -> None:
