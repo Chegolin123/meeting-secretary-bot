@@ -52,8 +52,9 @@ BUY_TEXT = (
 
 
 def _telegram_session(proxy: str | None) -> AiohttpSession:
-    """AIOTG-сессия; proxy — SOCKS5-туннель к api.telegram.org (обязательно из РФ)."""
-    return AiohttpSession(proxy=proxy)
+    """AIOTG-сессия; proxy — SOCKS5-туннель к api.telegram.org (обязательно из РФ).
+    Таймаут 300с — скачивание голосовых через туннель медленнее прямого."""
+    return AiohttpSession(proxy=proxy, timeout=aiohttp.ClientTimeout(total=300))
 
 
 async def main() -> None:

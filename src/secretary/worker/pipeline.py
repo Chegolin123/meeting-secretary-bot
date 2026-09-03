@@ -7,6 +7,7 @@ v1.1: вынос в Celery, когда появится параллельная
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from secretary.llm.deepseek import DeepSeekClient, MeetingSummary
 from secretary.report.formats import render_docx, render_tg_html, render_txt
 from secretary.storage import Storage
 from secretary.stt.base import STTError, TranscriptResult, get_provider
+
+log = logging.getLogger("secretary.pipeline")
 
 TEMP_SUFFIXES = ".ogg .m4a .mp3 .wav .mp4 .mov .webm .opus .oga .aac .flac"
 
@@ -58,7 +61,8 @@ class Pipeline:
         try:
             await self._process(order_id)
         except Exception as e:  # noqa: BLE001
-            await self._fail(order_id, f"Внутренняя ошибка: {e}")
+            log.exception("Заказ %s упал: %s", order_id, e)
+            await self._fail(order_id, f"{type(e).__name__}: {e}")
 
     async def _process(self, order_id: int) -> None:
         order = await self.storage.get_order(order_id)
