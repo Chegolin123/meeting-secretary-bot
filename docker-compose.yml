@@ -1,0 +1,41 @@
+# Деплой на Коренёво (решение 03.09.2026).
+# Контент-завод и автопилот убиты — сервер свободен (RAM available ~2.16 ГБ).
+#
+# Туннель к api.telegram.org (обязательно в РФ):
+#   см. scripts/telegram-tunnel.service — SOCKS5 через NL VPS, TELEGRAM_PROXY=socks5://127.0.0.1:1082
+#
+# Старт:  docker compose up -d --build
+# Логи:   docker compose logs -f bot
+
+services:
+  api:
+    build: .
+    command: uvicorn secretary.api.main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    ports:
+      - "8010:8000"          # на Коренёво; наружу — по необходимости (nginx/tailscale)
+    volumes:
+      - ./data:/app/data
+      - ./web:/app/web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  bot:
+    build: .
+    command: python -m secretary.bot
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

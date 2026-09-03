@@ -1,0 +1,24 @@
+# Systemd-юнит: SOCKS5-туннель Коренёво -> NL VPS для api.telegram.org
+# Паттерн ServerHub-TgTunnel (уже работает на ПК). Проверено: api.telegram.org
+# из РФ недоступен напрямую (05.08.2026), с NL VPS — OK.
+#
+# Установка (на Коренёво, от root):
+#   cp scripts/telegram-tunnel.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now telegram-tunnel
+#
+# Проверка: curl -x socks5h://127.0.0.1:1082 https://api.telegram.org/bot<TOKEN>/getMe
+
+[Unit]
+Description=SOCKS5 tunnel Korereno -> NL VPS for api.telegram.org
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# autossh держит туннель живым; замените host/ключ на ваши
+ExecStart=/usr/bin/autossh -M 0 -N -D 127.0.0.1:1082 -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 root@144.31.207.192
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
