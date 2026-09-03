@@ -11,7 +11,6 @@ import logging
 import sys
 from pathlib import Path
 
-import aiohttp
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import LabeledPrice
@@ -53,8 +52,8 @@ BUY_TEXT = (
 
 def _telegram_session(proxy: str | None) -> AiohttpSession:
     """AIOTG-сессия; proxy — SOCKS5-туннель к api.telegram.org (обязательно из РФ).
-    Таймаут 300с — скачивание голосовых через туннель медленнее прямого."""
-    return AiohttpSession(proxy=proxy, timeout=aiohttp.ClientTimeout(total=300))
+    timeout=300с — скачивание голосовых через туннель медленнее прямого."""
+    return AiohttpSession(proxy=proxy, timeout=300)
 
 
 async def main() -> None:
