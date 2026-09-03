@@ -18,6 +18,7 @@ from aiogram.types import LabeledPrice
 from secretary.config import Settings, get_settings
 from secretary.payments.gateway import Package, get_gateway
 from secretary.storage import Storage
+from secretary.team import render_digest, resolve_owner
 from secretary.worker.pipeline import Pipeline
 
 log = logging.getLogger("secretary.bot")
@@ -78,9 +79,20 @@ async def main() -> None:
     async def on_help(message: types.Message) -> None:
         await message.answer(HELP_TEXT.format(max_mb=settings.max_file_mb))
 
+    @dp.message(F.text == "/digest")
+    async def on_digest(message: types.Message) -> None:
+        if message.chat.type in ("group", "supergroup", "channel"):
+            rows = await storage.list_orders(message.chat.id, limit=100)
+        else:
+            rows = await storage.list_orders(message.from_user.id, limit=100)
+        enriched = [Storage.row_to_order(r) for r in rows]
+        await message.answer(render_digest(enriched))
+
     @dp.message(F.voice | F.audio | F.video | F.document)
     async def on_media(message: types.Message) -> None:
-        ok, limit_msg = await _check_limit(message.from_user.id)
+        # v1.2.0: в группе/канале клиента заказ принадлежит чату (пакет и лимит — на чат)
+        owner_id = resolve_owner(message.chat.type, message.from_user.id, message.chat.id)
+        ok, limit_msg = await _check_limit(owner_id)
         if not ok:
             await message.answer(limit_msg)
             return
@@ -96,7 +108,7 @@ async def main() -> None:
             await message.answer("⚠️ Не удалось прочитать файл — попробуй другой формат (mp3/ogg/mp4).")
             return
         order_id = await storage.create_order(
-            tg_user_id=message.from_user.id, file_name=file_id, mime=mime, size_bytes=size
+            tg_user_id=owner_id, file_name=file_id, mime=mime, size_bytes=size
         )
         await message.answer(f"📥 Заказ #{order_id} принят. Обработаю и пришлю отчёт.")
         await queue.put(order_id)

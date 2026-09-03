@@ -47,6 +47,29 @@ async def get_order(order_id: int) -> dict:
     return Storage.row_to_order(row)
 
 
+@app.get("/api/orders/{order_id}/export")
+async def export_order(order_id: int):
+    """Экспорт заказа в .docx (кабинет v1.1.0+)."""
+    row = await _storage.get_order(order_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="order not found")
+    if row["status"] != "done":
+        raise HTTPException(status_code=409, detail="заказ ещё не готов")
+    from io import BytesIO  # noqa: PLC0415
+
+    from fastapi.responses import Response  # noqa: PLC0415
+
+    from secretary.team import build_export_docx  # noqa: PLC0415
+
+    enriched = Storage.row_to_order(row)
+    docx = build_export_docx(enriched)
+    return Response(
+        content=docx.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="созвон-{order_id}.docx"'},
+    )
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
