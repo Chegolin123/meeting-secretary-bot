@@ -6,13 +6,17 @@ v2.0.0: здесь вырастет self-service — оплата, лимиты 
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
+from urllib.parse import quote  # noqa: PLC0415
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from secretary.config import get_settings
+from secretary.router import build_route_prompt, parse_route_answer, validate_decision
 from secretary.storage import Storage
 
 app = FastAPI(title="Secretary API", version="1.0.0")
@@ -82,3 +86,31 @@ async def index() -> FileResponse:
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+class RouteRequest(BaseModel):
+    """Тело /api/route: саммари заказа + каталог vault (с ПК)."""
+
+    order_id: int
+    summary: dict
+    catalog: list[dict[str, str]] = []
+
+
+@app.post("/api/route")
+async def route_order(req: RouteRequest) -> dict:
+    """LLM-роутер: куда в vault писать заметку о созвоне. Не уверен → ask (не додумываем)."""
+    from secretary.llm.deepseek import DeepSeekClient  # noqa: PLC0415
+
+    llm = DeepSeekClient(
+        api_key=_settings.deepseek_api_key,
+        base_url=_settings.deepseek_base_url,
+        model=_settings.deepseek_model,
+    )
+    try:
+        prompt = build_route_prompt(req.summary, req.catalog, req.order_id)
+        answer = await llm.summarize(prompt)
+        decision = parse_route_answer(answer.summary)
+        decision = validate_decision(decision, req.catalog)
+        return dataclasses.asdict(decision)
+    finally:
+        await llm.close()
