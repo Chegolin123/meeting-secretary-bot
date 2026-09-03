@@ -13,6 +13,7 @@ from pathlib import Path
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F, types
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import LabeledPrice
 
 from secretary.config import Settings, get_settings
@@ -41,13 +42,9 @@ BUY_TEXT = (
 )
 
 
-def _telegram_session(proxy: str | None) -> aiohttp.ClientSession:
-    if proxy:
-        from aiohttp_socks import ProxyConnector  # noqa: PLC0415
-
-        connector = ProxyConnector.from_url(proxy)
-        return aiohttp.ClientSession(connector=connector)
-    return aiohttp.ClientSession()
+def _telegram_session(proxy: str | None) -> AiohttpSession:
+    """AIOTG-сессия; proxy — SOCKS5-туннель к api.telegram.org (обязательно из РФ)."""
+    return AiohttpSession(proxy=proxy)
 
 
 async def main() -> None:
