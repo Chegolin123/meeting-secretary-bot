@@ -27,7 +27,7 @@ class RouteDecision:
 
 def build_route_prompt(summary: dict, catalog: list[dict[str, str]], order_id: int) -> str:
     """Промпт для DeepSeek: дал саммари и каталог vault → указал цель или ask."""
-    catalog_lines = '\n'.join(f"- {c['path']}  ({c['name']})" for c in catalog[:120]) or '- (каталог пуст)'
+    catalog_lines = '\n'.join(f"- {c['path']}  ({c['name']})" for c in catalog[:80]) or '- (каталог пуст)'
     payload = json.dumps({'summary': summary, 'order_id': order_id}, ensure_ascii=False)
     return (
         'Ты — роутер заметок в Obsidian vault. По саммари созвона и каталогу vault определи, '

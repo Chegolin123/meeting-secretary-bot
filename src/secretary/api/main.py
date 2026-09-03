@@ -99,8 +99,11 @@ class RouteRequest(BaseModel):
 @app.post("/api/route")
 async def route_order(req: RouteRequest) -> dict:
     """LLM-роутер: куда в vault писать заметку о созвоне. Не уверен → ask (не додумываем)."""
+    import logging  # noqa: PLC0415
+
     from secretary.llm.deepseek import DeepSeekClient  # noqa: PLC0415
 
+    log = logging.getLogger("secretary.api")
     llm = DeepSeekClient(
         api_key=_settings.deepseek_api_key,
         base_url=_settings.deepseek_base_url,
@@ -109,6 +112,7 @@ async def route_order(req: RouteRequest) -> dict:
     try:
         prompt = build_route_prompt(req.summary, req.catalog, req.order_id)
         answer = await llm.summarize(prompt)
+        log.info("route #%s ответ LLM: %.400s", req.order_id, answer.summary)
         decision = parse_route_answer(answer.summary)
         decision = validate_decision(decision, req.catalog)
         return dataclasses.asdict(decision)
