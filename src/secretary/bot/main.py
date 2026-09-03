@@ -33,12 +33,11 @@ from secretary.admin import (  # noqa: E402 — импорт после лока
 log = logging.getLogger("secretary.bot")
 
 HELP_TEXT = (
-    "🎙 <b>ИИ-секретарь созвонов</b>\n\n"
-    "Пришли аудио/видео созвона — получу стенограмму с репликами спикеров, "
-    "саммари, решения и задачи.\n\n"
+    "🎙 <b>Личный инструмент: конспекты пар</b>\n\n"
+    "Пришли аудио лекции/пары — получу <b>конспект</b>: предмет, тема, "
+    "ключевые тезисы, определения, формулы, вопросы для повторения.\n\n"
     "Поддерживается: voice, аудио, видео, документ (до {max_mb} МБ)."
-    "\n\n💰 Тарифы: /buy — пакеты звонков (Telegram Stars)."
-    "\n<i>Расшифровка предоставленного файла · согласие на запись — ответственность клиента.</i>"
+    "\n\n<i>Расшифровка предоставленного файла.</i>"
 )
 
 BUY_TEXT = (
@@ -225,6 +224,8 @@ async def main() -> None:
             await message.answer("Оплата получена, но тип не распознан — напиши поддержке.")
 
     async def _check_limit(user_id: int) -> tuple[bool, str | None]:
+        if is_admin(settings.admin_tg_ids, user_id):
+            return True, None  # владелец (личный инструмент) — без лимита пакета
         client = await storage.get_client(user_id)
         pkg = await storage.get_package(client["package_id"])
         used = await storage.count_done_calls(user_id)

@@ -60,12 +60,12 @@ class DeepSeekClient:
             await self._client.aclose()
             self._client = None
 
-    async def summarize(self, dialogue: str) -> MeetingSummary:
+    async def summarize(self, dialogue: str, system_prompt: str | None = None) -> MeetingSummary:
         s = await self._session()
         payload = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": build_system_prompt()},
+                {"role": "system", "content": system_prompt or build_system_prompt()},
                 {"role": "user", "content": dialogue[: 120_000]},  # предохранитель от гигантских входов
             ],
             "response_format": {"type": "json_object"},

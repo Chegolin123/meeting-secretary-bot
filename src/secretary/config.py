@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     max_file_mb: int = 20  # лимит Bot API на скачивание (Local Bot API Server — v1.1.0)
     retention_days: int = 7  # файлы храним 7 дней, затем удаляем (решение Н1)
     language_code: str = "ru"
+    study_mode: bool = False  # личный инструмент: конспекты лекций вместо решений/задач
     db_path: str = "data/secretary.db"
     data_dir: str = "data"
     api_host: str = "0.0.0.0"

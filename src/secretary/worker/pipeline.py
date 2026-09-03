@@ -90,6 +90,38 @@ class Pipeline:
 
             # 3. LLM-постобработка
             await self.storage.set_status(order_id, "llm")
+            if self.settings.study_mode:
+                # личный инструмент: конспект лекции
+                from secretary.study import (
+                    build_study_system_prompt,
+                    lecture_to_summary_json,
+                    parse_lecture,
+                    render_docx_lecture,
+                    render_tg_lecture,
+                )  # noqa: PLC0415
+
+                await self._status(chat_id, f"⏳ Заказ #{order_id}: составляю конспект…")
+                raw = await self._llm.summarize(result.to_dialogue(), system_prompt=build_study_system_prompt())
+                lecture = parse_lecture(raw.summary)
+                await self.storage.save_result(
+                    order_id,
+                    provider=result.provider,
+                    audio_duration_sec=result.audio_duration_sec,
+                    summary_json=lecture_to_summary_json(lecture),
+                    transcript=render_txt(result),
+                )
+                tg_html = render_tg_lecture(result, lecture, order_id)
+                await self.bot.send_message(chat_id, tg_html)
+                try:
+                    await self.bot.send_document(
+                        chat_id,
+                        BufferedInputFile(render_docx_lecture(result, lecture, order_id).getvalue(), filename=f"конспект-{order_id}.docx"),
+                        caption=f"🎓 Конспект #{order_id} (.docx)",
+                    )
+                except RuntimeError:
+                    pass
+                await self._status(chat_id, f"✅ Заказ #{order_id}: конспект готов!")
+                return
             await self._status(chat_id, f"⏳ Заказ #{order_id}: составляю саммари и задачи…")
             summary: MeetingSummary = await self._llm.summarize(result.to_dialogue())
 

@@ -30,8 +30,9 @@ def build_route_prompt(summary: dict, catalog: list[dict[str, str]], order_id: i
     catalog_lines = '\n'.join(f"- {c['path']}  ({c['name']})" for c in catalog[:80]) or '- (каталог пуст)'
     payload = json.dumps({'summary': summary, 'order_id': order_id}, ensure_ascii=False)
     return (
-        'Ты — роутер заметок в Obsidian vault. По саммари созвона и каталогу vault определи, '
-        'куда сохранить заметку о созвоне. Каталог = список существующих заметок (путь + имя).\n\n'
+        'Ты — роутер заметок в Obsidian vault. По конспекту/саммари записи (лекция, созвон) '
+        'и каталогу vault определи, куда сохранить заметку. Каталог = список существующих '
+        'заметок (путь + имя).\n\n'
         'ПРАВИЛА:\n'
         "1. Если саммари явно относится к существующей заметке (проект/тема совпадают) — выбери её: "
         'mode="append", target_path=<путь из каталога>.\n'

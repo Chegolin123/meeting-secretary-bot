@@ -43,9 +43,12 @@ def _fmt_dt(sec: float) -> str:
 
 
 def render_note(order: dict) -> str:
-    """Заметка Obsidian из обогащённого заказа (Storage.row_to_order)."""
+    """Заметка Obsidian из обогащённого заказа. Конспект (study) — если есть учебные поля."""
     created = (order.get("created_at") or "")[:10]
     summary = order.get("summary") or {}
+    is_lecture = bool(summary.get("key_points") or summary.get("definitions"))
+    if is_lecture:
+        return _render_lecture_note(order, summary, created)
     lines = [
         "---",
         "tags: [созвон, стенограмма]",
@@ -80,6 +83,49 @@ def render_note(order: dict) -> str:
     if transcript:
         lines += ["## 📄 Стенограмма", "", transcript, ""]
     lines += ["## Связанные", "", f"- {LINK_IDEA}", "- [[MOC — Идеи]]", ""]
+    return "\n".join(lines)
+
+
+def _render_lecture_note(order: dict, summary: dict, created: str) -> str:
+    """Учебная заметка-конспект (study_mode): предмет, тезисы, определения, формулы, вопросы."""
+    lines = [
+        "---",
+        "tags: [конспект, лекция, учёба]",
+        "тип: конспект",
+        "статус: готово",
+        f'создан: "{created}"',
+        f"предмет: {summary.get('subject') or '—'}",
+        f"тема: {summary.get('lecture_topic') or '—'}",
+        f'длительность: "{_fmt_dt(float(order.get("audio_duration_sec") or 0))}"',
+        'updated: "' + datetime.now(timezone.utc).strftime("%Y-%m-%d") + '"',
+        "---",
+        "",
+        f"# 🎓 Конспект #{order['id']} — {created}",
+        "",
+    ]
+    if summary.get("subject"):
+        lines += [f"**Предмет:** {summary['subject']}", ""]
+    if summary.get("lecture_topic"):
+        lines += [f"**Тема:** {summary['lecture_topic']}", ""]
+    if summary.get("key_points"):
+        lines += ["## 📌 Ключевые тезисы", ""]
+        lines += [f"- {p}" for p in summary["key_points"]] + [""]
+    if summary.get("definitions"):
+        lines += ["## 📖 Определения", ""]
+        lines += [f"- **{d['term']}** — {d.get('definition', '')}" for d in summary["definitions"]] + [""]
+    if summary.get("formulas"):
+        lines += ["## 🧮 Формулы / детали", ""]
+        lines += [f"- {f}" for f in summary["formulas"]] + [""]
+    if summary.get("review_questions"):
+        lines += ["## ❓ Вопросы для повторения", ""]
+        lines += [f"{i + 1}. {q}" for i, q in enumerate(summary["review_questions"])] + [""]
+    if summary.get("unclear"):
+        lines += ["## 📌 Уточнить", ""]
+        lines += [f"- {u}" for u in summary["unclear"]] + [""]
+    transcript = (order.get("transcript") or "").strip()
+    if transcript:
+        lines += ["## 📄 Стенограмма", "", transcript, ""]
+    lines += ["## Связанные", "", f"- {LINK_IDEA}", ""]
     return "\n".join(lines)
 
 
