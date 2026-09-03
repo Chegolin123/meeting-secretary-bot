@@ -11,6 +11,8 @@ import logging
 import os
 from pathlib import Path
 
+from aiogram.types import BufferedInputFile
+
 from secretary.config import Settings
 from secretary.llm.deepseek import DeepSeekClient, MeetingSummary
 from secretary.report.formats import render_docx, render_tg_html, render_txt
@@ -105,8 +107,7 @@ class Pipeline:
                 docx_bytes = render_docx(result, summary, order_id)
                 await self.bot.send_document(
                     chat_id,
-                    docx_bytes,
-                    filename=f"созвон-{order_id}.docx",
+                    BufferedInputFile(docx_bytes.getvalue(), filename=f"созвон-{order_id}.docx"),
                     caption=f"📄 Отчёт #{order_id} (.docx)",
                 )
             except RuntimeError:

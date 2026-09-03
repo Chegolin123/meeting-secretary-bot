@@ -51,8 +51,8 @@ class FakeBot:
     async def send_message(self, chat_id: int, text: str) -> None:
         self.sent.append(text)
 
-    async def send_document(self, chat_id: int, docx, filename: str = "", caption: str = "") -> None:
-        self.docs.append((filename, docx.getvalue()))
+    async def send_document(self, chat_id: int, document, caption: str = "") -> None:
+        self.docs.append((document.filename, document.data))
 
 
 async def test_pipeline_full_order(tmp_path):
