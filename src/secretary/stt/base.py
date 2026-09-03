@@ -44,17 +44,19 @@ class STTProvider(Protocol):
 
 
 def get_provider(settings) -> STTProvider:
-    from secretary.stt.assembly import AssemblyAIProvider
-
     if settings.stt_provider == "assemblyai":
+        from secretary.stt.assembly import AssemblyAIProvider
+
         return AssemblyAIProvider(
             api_key=settings.assemblyai_api_key,
             base_url=settings.assemblyai_base_url,
         )
-    # v1.3.0: speechkit — заглушка с понятной ошибкой до сверки тарифов
-    if settings.stt_provider == "speechkit":
-        raise NotImplementedError(
-            "SpeechKit подключён после сверки тарифов (см. Дорожную карту v1.3.0). "
-            "Пока используйте STT_PROVIDER=assemblyai."
+    if settings.stt_provider == "speechkit":  # v1.3.0: резерв для чувствительных записей
+        from secretary.stt.speechkit import SpeechKitProvider
+
+        return SpeechKitProvider(
+            api_key=getattr(settings, "speechkit_api_key", ""),
+            folder_id=getattr(settings, "speechkit_folder_id", ""),
+            iam_token=getattr(settings, "speechkit_iam_token", ""),
         )
     raise STTError(f"Неизвестный STT_PROVIDER={settings.stt_provider!r}")

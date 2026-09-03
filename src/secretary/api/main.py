@@ -55,7 +55,7 @@ async def export_order(order_id: int):
         raise HTTPException(status_code=404, detail="order not found")
     if row["status"] != "done":
         raise HTTPException(status_code=409, detail="заказ ещё не готов")
-    from io import BytesIO  # noqa: PLC0415
+    from urllib.parse import quote  # noqa: PLC0415
 
     from fastapi.responses import Response  # noqa: PLC0415
 
@@ -63,10 +63,16 @@ async def export_order(order_id: int):
 
     enriched = Storage.row_to_order(row)
     docx = build_export_docx(enriched)
+    filename = f"созвон-{order_id}.docx"
     return Response(
         content=docx.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="созвон-{order_id}.docx"'},
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="sovon-{order_id}.docx"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            )
+        },
     )
 
 

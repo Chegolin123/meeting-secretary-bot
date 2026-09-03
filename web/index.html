@@ -23,12 +23,13 @@
 <body>
 <header><b>🎙 ИИ-секретарь созвонов</b> — кабинет <span id="ver" style="opacity:.6">v2.0 (scaffold)</span></header>
 <main>
-  <div class="hint">Фундамент self-service-кабинета (дорожная карта v2.0.0): история заказов, дальше — оплата, пакеты, экспорт.</div>
+  <div class="hint">Фундамент self-service-кабинета (дорожная карта v2.0.0): история заказов, детали, экспорт .docx. Клик по строке — подробности.</div>
   <table>
-    <thead><tr><th>#</th><th>Статус</th><th>Провайдер</th><th>Длительность</th><th>Создан</th></tr></thead>
+    <thead><tr><th>#</th><th>Статус</th><th>Провайдер</th><th>Длительность</th><th>Темы</th><th>Создан</th><th></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
-  <div class="empty" id="empty" hidden>Заказов пока нет — пришли боту первый созвон.</div>
+  <div class="empty" id="empty" hidden>Заказов пока нет — пришли боту первый созвон, или наполни демо: <code>python scripts/seed_demo.py</code></div>
+  <div id="detail" hidden style="margin-top:16px;background:#fff;border-radius:8px;padding:16px"></div>
 </main>
 <script>
 async function load() {
@@ -42,12 +43,42 @@ async function load() {
   for (const o of orders) {
     const cls = o.status === 'done' ? 'done' : (o.status === 'error' ? 'error' : 'other');
     const dur = o.audio_duration_sec ? Math.round(o.audio_duration_sec / 60) + ' мин' : '—';
+    const topics = (o.summary && o.summary.key_topics || []).slice(0, 3).join(', ') || '—';
+    const exp = o.status === 'done'
+      ? `<a href="/api/orders/${o.id}/export" title="Скачать .docx">⬇ docx</a>` : '';
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
     tr.innerHTML = `<td>#${o.id}</td><td><span class="badge ${cls}">${o.status}</span></td>
-      <td>${o.provider || '—'}</td><td>${dur}</td><td>${(o.created_at || '').slice(0, 19).replace('T', ' ')}</td>`;
+      <td>${o.provider || '—'}</td><td>${dur}</td><td>${esc(topics)}</td>
+      <td>${(o.created_at || '').slice(0, 19).replace('T', ' ')}</td><td>${exp}</td>`;
+    tr.onclick = () => showDetail(o);
     tbody.appendChild(tr);
   }
 }
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function showDetail(o) {
+  const res = await fetch('/api/orders/' + o.id);
+  const d = await res.json();
+  const el = document.getElementById('detail');
+  el.hidden = false;
+  let html = `<b>Заказ #${d.id}</b> · ${d.status} · ${d.provider || '—'}<br>`;
+  if (d.status === 'done' && d.summary) {
+    html += `<p><b>Саммари:</b> ${esc(d.summary.summary)}</p>`;
+    if (d.summary.decisions && d.summary.decisions.length)
+      html += `<p><b>Решения:</b><ul>${d.summary.decisions.map(x => `<li>${esc(x)}</li>`).join('')}</ul></p>`;
+    if (d.summary.tasks && d.summary.tasks.length)
+      html += `<p><b>Задачи:</b><ul>${d.summary.tasks.map(t => `<li>${esc(t.task)} — ${esc(t.owner || '')} [${esc(t.priority)}]</li>`).join('')}</ul></p>`;
+    html += `<a href="/api/orders/${d.id}/export">⬇ Скачать отчёт .docx</a>`;
+  } else if (d.status === 'error') {
+    html += `<p style="color:#b42318">Ошибка: ${esc(d.error)}</p>`;
+  } else {
+    html += '<p><i>Заказ в обработке…</i></p>';
+  }
+  el.innerHTML = html;
+}
+
 load();
 </script>
 </body>
