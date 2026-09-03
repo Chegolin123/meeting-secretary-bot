@@ -80,6 +80,19 @@ async def main() -> None:
     @dp.message(F.text == "/start")
     async def on_start(message: types.Message) -> None:
         await storage.ensure_client(message.from_user.id)  # регистрируем клиента по tg id
+        if is_admin(settings.admin_tg_ids, message.from_user.id):
+            await message.answer(
+                "👑 <b>Ты владелец</b> — админ-панель:\n"
+                "/admin — обзор\n"
+                "/admin clients — клиенты (пакеты, лимиты)\n"
+                "/admin orders — заказы всех\n"
+                "/admin errors — ошибки\n"
+                "/admin grant &lt;id&gt; &lt;mini|pro&gt; — пакет вручную\n"
+                "/admin health — конфиг\n\n"
+                "🎙 <b>Тест продукта:</b> пришли голосовое — получишь саммари.",
+                parse_mode="HTML",
+            )
+            return
         await message.answer(HELP_TEXT.format(max_mb=settings.max_file_mb))
 
     @dp.message(F.text == "/help")
