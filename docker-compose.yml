@@ -28,14 +28,9 @@ services:
     build: .
     command: python -m secretary.bot
     env_file: .env
+    # host-network: бот видит SOCKS-туннель 127.0.0.1:1082 (user-юнит telegram-tunnel
+    # на Коренёво). SQLite-файл общий через volume — api и bot живут на одной машине.
+    network_mode: host
     volumes:
       - ./data:/app/data
-    depends_on:
-      api:
-        condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
