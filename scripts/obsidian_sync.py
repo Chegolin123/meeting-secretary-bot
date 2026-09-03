@@ -232,7 +232,7 @@ def sync(api_url: str, vault: Path, owner: int, limit: int = 100) -> tuple[int, 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Мост: созвоны → Obsidian (с LLM-роутингом)")
-    p.add_argument("--api", default=os.environ.get("SECRETARY_API", "http://100.95.240.30:8000"))
+    p.add_argument("--api", default=os.environ.get("SECRETARY_API", "http://100.95.240.30:8010"))
     p.add_argument("--vault", default=r"C:\Users\Aleks\Desktop\opencode\obs")
     p.add_argument("--owner", type=int, default=None, help="TG id владельца (по умолчанию ADMIN_TG_IDS из .env)")
     p.add_argument("--interval", type=int, default=0, help="Цикл каждые N минут (0 = разово)")
