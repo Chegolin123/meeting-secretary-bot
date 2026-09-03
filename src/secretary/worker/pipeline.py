@@ -20,13 +20,22 @@ TEMP_SUFFIXES = ".ogg .m4a .mp3 .wav .mp4 .mov .webm .opus .oga .aac .flac"
 
 
 class Pipeline:
-    def __init__(self, settings: Settings, storage: Storage, bot, queue: asyncio.Queue[int]):
+    def __init__(
+        self,
+        settings: Settings,
+        storage: Storage,
+        bot,
+        queue: asyncio.Queue[int],
+        stt=None,
+        llm: DeepSeekClient | None = None,
+    ):
+        """stt/llm — опциональные подмены (тесты, будущие провайдеры); по умолчанию из конфига."""
         self.settings = settings
         self.storage = storage
         self.bot = bot
         self.queue = queue
-        self._stt = get_provider(settings)
-        self._llm = DeepSeekClient(
+        self._stt = stt if stt is not None else get_provider(settings)
+        self._llm = llm if llm is not None else DeepSeekClient(
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             model=settings.deepseek_model,
@@ -45,6 +54,13 @@ class Pipeline:
                 self.queue.task_done()
 
     async def process(self, order_id: int) -> None:
+        """Полный цикл заказа. Гарантирует статус error в БД при любой ошибке."""
+        try:
+            await self._process(order_id)
+        except Exception as e:  # noqa: BLE001
+            await self._fail(order_id, f"Внутренняя ошибка: {e}")
+
+    async def _process(self, order_id: int) -> None:
         order = await self.storage.get_order(order_id)
         if order is None:
             return
