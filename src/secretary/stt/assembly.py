@@ -9,25 +9,35 @@ from secretary.stt.base import STTError, TranscriptResult, Utterance
 
 POLL_INTERVAL_SEC = 5.0
 POLL_TIMEOUT_SEC = 60 * 30  # 30 минут максимум на час аудио
+UPLOAD_RETRIES = 3
 
 
 class AssemblyAIProvider:
     provider_name = "assemblyai"
 
-    def __init__(self, api_key: str, base_url: str = "https://api.assemblyai.com", client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.assemblyai.com",
+        proxy: str | None = None,
+        client: httpx.AsyncClient | None = None,
+    ):
         if not api_key:
             raise STTError("ASSEMBLYAI_API_KEY не задан")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._proxy = proxy
         # client передаётся извне для тестов; production создаёт свой
         self._client = client
 
     async def _session(self) -> httpx.AsyncClient:
         if self._client is None:
+            kwargs: dict = {"proxy": self._proxy} if self._proxy else {}
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
                 headers={"authorization": self._api_key},
-                timeout=httpx.Timeout(120.0, connect=30.0),
+                timeout=httpx.Timeout(300.0, connect=60.0),
+                **kwargs,
             )
         return self._client
 
@@ -37,11 +47,19 @@ class AssemblyAIProvider:
             self._client = None
 
     async def _upload(self, audio_bytes: bytes) -> str:
+        """Загрузка с ретраями: домашний интернет к AssemblyAI нестабилен (ReadTimeout наблюдался)."""
         s = await self._session()
-        r = await s.post("/v2/upload", content=audio_bytes, headers={"content-type": "application/octet-stream"})
-        if r.status_code != 200:
-            raise STTError(f"AssemblyAI upload failed: {r.status_code} {r.text[:200]}")
-        return r.json()["upload_url"]
+        last: Exception | None = None
+        for attempt in range(UPLOAD_RETRIES):
+            try:
+                r = await s.post("/v2/upload", content=audio_bytes, headers={"content-type": "application/octet-stream"})
+                if r.status_code == 200:
+                    return r.json()["upload_url"]
+                last = STTError(f"AssemblyAI upload failed: {r.status_code} {r.text[:200]}")
+            except Exception as e:  # noqa: BLE001 — retry на любую сетевую ошибку
+                last = e
+            await asyncio.sleep(5 * (attempt + 1))
+        raise STTError(f"AssemblyAI upload failed ({UPLOAD_RETRIES} попытки): {last}")
 
     async def _create_transcript(self, audio_url: str, language: str) -> str:
         s = await self._session()

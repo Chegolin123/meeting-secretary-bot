@@ -50,6 +50,7 @@ def get_provider(settings) -> STTProvider:
         return AssemblyAIProvider(
             api_key=settings.assemblyai_api_key,
             base_url=settings.assemblyai_base_url,
+            proxy=settings.assemblyai_proxy,
         )
     if settings.stt_provider == "speechkit":  # v1.3.0: резерв для чувствительных записей
         from secretary.stt.speechkit import SpeechKitProvider

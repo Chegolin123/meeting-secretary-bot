@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     stt_provider: str = "assemblyai"  # v1.3.0: assemblyai | speechkit
     assemblyai_api_key: str = ""
     assemblyai_base_url: str = "https://api.assemblyai.com"
+    assemblyai_proxy: str | None = None  # socks5://127.0.0.1:1082 — стабильный маршрут через NL VPS
     speechkit_api_key: str = ""  # или speechkit_iam_token (для сервисных аккаунтов)
     speechkit_iam_token: str = ""
     speechkit_folder_id: str = ""
