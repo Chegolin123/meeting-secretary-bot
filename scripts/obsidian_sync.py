@@ -248,10 +248,14 @@ def save_sync_map(vault: Path, mapping: dict, order_id: int, path: str) -> None:
 
 
 def sync(api_url: str, vault: Path, owner: int, limit: int = 100) -> tuple[int, int, int]:
-    """Возвращает (создано, пропущено, вопросов)."""
+    """Возвращает (создано, пропущено, вопросов). Сетевые сбои не роняют цикл."""
     if httpx is None:  # pragma: no cover
         raise SystemExit("httpx не установлен — pip install httpx")
-    orders = httpx.get(f"{api_url.rstrip('/')}/api/orders?limit={limit}", timeout=15).json()
+    try:
+        orders = httpx.get(f"{api_url.rstrip('/')}/api/orders?limit={limit}", timeout=15).json()
+    except Exception as e:  # noqa: BLE001 — нет сети/сервер недоступен: ждём следующего цикла
+        print(f"  ⚠ API недоступен: {type(e).__name__}: {e}")
+        return 0, 0, 0
     mapping = load_sync_map(vault)
     created = skipped = questions = 0
     for order in orders:
@@ -266,7 +270,11 @@ def sync(api_url: str, vault: Path, owner: int, limit: int = 100) -> tuple[int, 
             decision = fetch_route(api_url, order, catalog)
         except Exception as e:  # noqa: BLE001 — роутер недоступен → вопрос, не догадка
             decision = {"mode": "ask", "reason": f"роутер недоступен: {e}"}
-        mode, target = apply_decision(decision, order, vault)
+        try:
+            mode, target = apply_decision(decision, order, vault)
+        except Exception as e:  # noqa: BLE001 — применять решение не вышло: вопрос в лог, дальше
+            print(f"  ⚠ не удалось применить решение для #{oid}: {e}")
+            continue
         save_sync_map(vault, mapping, oid, str(target.relative_to(vault)))
         if mode == "ask":
             questions += 1
